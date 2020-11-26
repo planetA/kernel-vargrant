@@ -1,0 +1,66 @@
+---
+- hosts: master
+  connection: local
+  vars_files: "{{ playbook_dir }}/config.yaml"
+  tasks:
+    - name: Install kernel locally 
+      command:
+        argv:
+          - make
+          - -j5
+          - install
+      args:
+        chdir: "{{ kernel_src }}"
+      delegate_to: localhost
+      environment:
+        INSTALL_PATH: "{{ playbook_dir  }}/roles/kernel_install/files/kernel/boot"
+    - name: Install kernel modules locally 
+      command:
+        argv:
+          - make
+          - -j5
+          - modules_install
+      args:
+        chdir: "{{ kernel_src }}"
+      delegate_to: localhost
+      environment:
+        INSTALL_PATH: "{{playbook_dir}}/roles/kernel_install/files/kernel/boot"
+        INSTALL_MOD_PATH: "{{playbook_dir}}/roles/kernel_install/files/kernel/"
+    - name: Install headers
+      command:
+        argv:
+          - make
+          - "INSTALL_HDR_PATH={{ playbook_dir  }}/roles/kernel_install/files/kernel/usr"
+          - headers_install
+      args:
+        chdir: "{{ kernel_src }}"
+      delegate_to: localhost
+      environment:
+        INSTALL_PATH: "{{playbook_dir }}/roles/kernel_install/files/kernel/boot"
+        INSTALL_MOD_PATH: "{{playbook_dir}}/roles/kernel_install/files/kernel/"
+- hosts: workers
+  vars_files: "{{ playbook_dir }}/config.yaml"
+  roles:
+    - kernel_install
+    - rdma_install
+- hosts: nadu1
+  tasks:
+    - name: Start server
+      command: ib_send_bw -b
+      async: 120
+      poll: 0
+      register: send_bw_srv
+- hosts: nadu2
+  tasks:
+    - name: Start client
+      command: ib_send_bw -b nadu1
+- hosts: nadu1
+  tasks:
+    - name: Check back the server
+      async_status:
+        jid: "{{ send_bw_srv.ansible_job_id }}"
+      register: srv_result
+      until: srv_result.finished
+      retries: 10
+      delay: 5
+

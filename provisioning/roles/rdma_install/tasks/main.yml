@@ -1,0 +1,97 @@
+---
+- name: Install all required dev packages
+  become: true
+  apt:
+    pkg:
+      - libnl-route-3-dev
+      - pandoc
+      - docutils-common
+      - iproute2
+      - libmnl-dev
+      - lldb
+      - strace
+      - ltrace
+- name: Download iproute2
+  unarchive:
+    src: "{{ iproute2_url | quote }}"
+    dest: "{{ home_dir }}"
+    remote_src: yes
+- name: Compile iproute2
+  shell: "./configure && make -j2"
+  args:
+    chdir: "{{home_dir}}/{{iproute2_version}}"
+    creates: "{{home_dir}}/{{iproute2_version}}/rdma/rdma"
+- name: Install iproute2
+  become: true
+  shell: "make install && touch installed || rm installed"
+  args:
+    chdir: "{{home_dir}}/{{iproute2_version}}"
+    creates: "{{home_dir}}/{{iproute2_version}}/installed"
+- name: Sync rdma-core repo
+  ansible.posix.synchronize:
+    src: "{{rdma_core_src}}/"
+    dest: "{{rdma_core_src_vm}}"
+    delete: true
+    rsync_opts:
+      - "--exclude=.git"
+      - "--exclude=build"
+- name: Create build directory
+  file:
+    path: "{{rdma_core_src_vm}}/build"
+    state: directory
+- name: Run cmake
+  command:
+    argv:
+      - cmake
+      - -DCMAKE_INSTALL_PREFIX=/usr
+      - ..
+  args:
+    chdir: "{{rdma_core_src_vm}}/build"
+    # creates: "{{rdma_core_src_vm}}/build/Makefile"
+- name: Compile rdma-core
+  command:
+    argv:
+      - make
+      - -j5
+  args:
+    chdir: "{{ rdma_core_src_vm }}/build"
+- name: Install rdma-core
+  become: true
+  command:
+    argv:
+      - make
+      - install
+  args:
+    chdir: "{{ rdma_core_src_vm }}/build"
+- name: Load drivers
+  become: true
+  community.general.modprobe:
+    name: rdma_rxe
+    state: present
+- name: Add SoftRoCE device
+  become: true
+  shell: /usr/sbin/rdma link show rxe0/1 || /usr/sbin/rdma link add rxe0 type rxe netdev eth1
+- name: Add SoftiWarp device
+  become: true
+  shell: /usr/sbin/rdma link show siw0/1 || /usr/sbin/rdma link add siw0 type siw netdev eth1
+- name: Get perftest tools
+  unarchive:
+    src: "{{ perftest_url | quote }}"
+    dest: "{{home_dir}}"
+    remote_src: yes
+- name: Configure perftest
+  shell: "./autogen.sh && ./configure"
+  args:
+    chdir: "{{home_dir}}/{{perftest_dir}}"
+    creates: "{{home_dir}}/{{perftest_dir}}/Makefile"
+- name: Compile perftest
+  shell: "make -j"
+  args:
+    chdir: "{{home_dir}}/{{perftest_dir}}"
+    creates: "{{home_dir}}/{{perftest_dir}}/ib_send_bw"
+- name: Install perftest
+  become: true
+  shell: "make install"
+  args:
+    chdir: "{{home_dir}}/{{perftest_dir}}"
+    creates: "/usr/bin/ib_send_bw"

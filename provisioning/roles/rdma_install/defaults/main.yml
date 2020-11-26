@@ -1,0 +1,9 @@
+---
+home_dir: /home/vagrant
+rdma_core_src_vm: "{{home_dir}}/rdma-core/"
+iproute2_version: iproute2-5.9.0
+iproute2_archive: "{{iproute2_version}}.tar.gz"
+iproute2_url: "https://mirrors.edge.kernel.org/pub/linux/utils/net/iproute2/{{ iproute2_archive }}"
+perftest_version: 4.4-0.32
+perftest_dir: "perftest-{{perftest_version}}"
+perftest_url: "https://github.com/linux-rdma/perftest/archive/v{{perftest_version}}.tar.gz"

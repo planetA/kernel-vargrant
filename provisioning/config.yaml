@@ -1,0 +1,3 @@
+---
+kernel_src: ~/src/linux-2.6
+rdma_core_src: ~/src/rdma-core
